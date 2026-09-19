@@ -1,5 +1,511 @@
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><title>Review</title></head>
-<body>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Review</title>
 <script id="review-params" type="application/json">{}</script>
-</body></html>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
+      },
+      colors: {
+        accent: '#ff6b35',
+      }
+    }
+  }
+}
+</script>
+</head>
+<body class="bg-stone-200 font-sans text-stone-900">
+
+<div class="max-w-[1500px] mx-auto">
+
+  <!-- Header -->
+  <div class="bg-stone-900 px-8 py-5 flex items-end justify-between">
+    <div>
+      <div class="text-[11px] font-bold uppercase tracking-[3px] text-accent mb-1">Review</div>
+      <div id="title" class="text-[26px] font-extrabold text-white tracking-tight leading-none">&nbsp;</div>
+    </div>
+    <div class="text-right text-stone-500 text-[11px] font-mono leading-5">
+      video-use / review.py
+      <div id="meta" class="text-stone-400"></div>
+    </div>
+  </div>
+
+  <!-- Capability banner -->
+  <div id="banner" class="hidden bg-amber-100 border-b border-amber-300 px-8 py-3 text-[13px] text-amber-900"></div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 p-6">
+
+    <!-- Left: player -->
+    <div>
+      <div class="bg-black rounded-xl overflow-hidden border border-stone-400 shadow-sm">
+        <video id="video" class="w-full block max-h-[62vh] bg-black" preload="metadata"></video>
+      </div>
+
+      <!-- Transport -->
+      <div class="mt-3 flex items-center gap-4">
+        <button id="play" class="w-[92px] px-4 py-2 rounded-lg bg-stone-900 text-white text-[13px] font-semibold hover:bg-stone-700">Play</button>
+        <div id="clock" class="font-mono text-[15px] font-semibold tabular-nums">0:00.00</div>
+        <div id="of" class="font-mono text-[12px] text-stone-500"></div>
+        <div class="ml-auto flex items-center gap-2">
+          <label for="speed" class="text-[11px] font-bold uppercase tracking-[2px] text-stone-500">Speed</label>
+          <select id="speed" class="rounded-lg border border-stone-400 bg-white px-2 py-1.5 text-[13px] font-mono"></select>
+        </div>
+      </div>
+
+      <!-- Marker strip -->
+      <div class="mt-3">
+        <div id="strip" class="relative h-[54px] rounded-lg bg-stone-300 border border-stone-400 cursor-crosshair select-none overflow-hidden">
+          <div id="sel" class="hidden absolute top-0 bottom-0 bg-accent/25 border-x border-accent pointer-events-none"></div>
+          <div id="head" class="absolute top-0 bottom-0 w-[2px] bg-stone-900 pointer-events-none"></div>
+        </div>
+        <div class="mt-1.5 text-[11px] text-stone-500">
+          Click to seek, drag for a range.
+          <span class="font-mono text-stone-600">space</span> play ·
+          <span class="font-mono text-stone-600">c</span> comment here ·
+          <span class="font-mono text-stone-600">i</span>/<span class="font-mono text-stone-600">o</span> range ·
+          <span class="font-mono text-stone-600">&larr;</span>/<span class="font-mono text-stone-600">&rarr;</span> a frame ·
+          <span class="font-mono text-stone-600">&lt;</span>/<span class="font-mono text-stone-600">&gt;</span> speed
+        </div>
+      </div>
+
+      <!-- Comment editor -->
+      <div id="editor" class="hidden mt-4 bg-white rounded-xl border border-stone-400 p-4 shadow-sm">
+        <div class="flex items-center gap-3 mb-3">
+          <div id="editor-when" class="font-mono text-[14px] font-semibold"></div>
+          <button id="editor-clear-out" class="hidden text-[11px] text-stone-500 underline hover:text-stone-900">drop the end, make it a point</button>
+        </div>
+        <div id="kinds" class="flex flex-wrap gap-2 mb-3"></div>
+        <textarea id="text" rows="3" placeholder="What is wrong with this bit?"
+          class="w-full rounded-lg border border-stone-400 px-3 py-2 text-[14px] focus:outline-none focus:border-accent"></textarea>
+        <div class="mt-3 flex items-center gap-2">
+          <button id="save" class="px-4 py-2 rounded-lg bg-accent text-white text-[13px] font-semibold hover:brightness-95">Save</button>
+          <button id="cancel" class="px-4 py-2 rounded-lg border border-stone-400 text-[13px] font-semibold hover:bg-stone-100">Cancel</button>
+          <div class="ml-auto text-[11px] text-stone-500"><span class="font-mono">enter</span> saves · <span class="font-mono">esc</span> cancels</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: notes -->
+    <div>
+      <div class="flex items-baseline justify-between mb-2">
+        <div class="text-[10px] font-extrabold uppercase tracking-[3px] text-stone-500">Notes</div>
+        <div id="count" class="text-[11px] font-mono text-stone-500">0</div>
+      </div>
+      <div id="notes" class="space-y-2"></div>
+      <div id="empty" class="text-[13px] text-stone-500 leading-relaxed">
+        Nothing yet. Play the cut, and when something is off press
+        <span class="font-mono">c</span> to stop and say so.
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const params = JSON.parse(document.getElementById("review-params").textContent);
+  const KINDS = ["cut", "shorten", "lengthen", "wrong", "note"];
+  const KIND_COLOR = {
+    cut: "#ff5c4d", shorten: "#e8b339", lengthen: "#4d9dff",
+    wrong: "#ff6b35", note: "#8a8a8a",
+  };
+  const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+  const NOTES_KEY = "video-use-review:" + (params.stem || "review");
+  const SPEED_KEY = "video-use-review-speed";
+
+  // Same rule as helpers/review.py: a rate is a string, "24" or "30000/1001".
+  function fpsToFloat(text) {
+    const parts = String(text || "").split("/");
+    const num = parseFloat(parts[0]);
+    const den = parts.length > 1 ? parseFloat(parts[1]) : 1;
+    if (!(num > 0) || !(den > 0)) return 25;
+    return num / den;
+  }
+  const FPS = fpsToFloat(params.fps);
+
+  // Mirrors time_to_frame() in helpers/review.py. A note that says "cut" has to
+  // become a cut later, and that needs a frame, not a float.
+  function timeToFrame(t) { return Math.max(0, Math.round(t * FPS)); }
+
+  function timecode(t) {
+    t = Math.max(0, t || 0);
+    let m = Math.floor(t / 60);
+    let rest = t - m * 60;
+    let s = Math.floor(rest);
+    let f = Math.round((rest - s) * FPS);
+    if (f >= Math.round(FPS)) { f = 0; s += 1; if (s >= 60) { s = 0; m += 1; } }
+    return m + ":" + String(s).padStart(2, "0") + "." + String(f).padStart(2, "0");
+  }
+
+  function stamp() {
+    const d = new Date(), p = (n) => String(n).padStart(2, "0");
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) +
+           "T" + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const video = $("video"), strip = $("strip"), editor = $("editor");
+
+  let notes = [];
+  let draft = null;          // {t_in, t_out} while the editor is open
+  let draftKind = "note";
+  let editing = null;        // id being edited, or null for a new note
+  let selected = null;
+  let pendingIn = null;      // set by the "i" key
+
+  function duration() {
+    return (isFinite(video.duration) && video.duration > 0)
+      ? video.duration : (params.duration || 0);
+  }
+
+  // ---- storage -----------------------------------------------------------
+  // Every change goes to localStorage at once, so closing the tab by mistake
+  // costs nothing. Disk is the next commit; this is the floor, not the ceiling.
+  function persist() {
+    try {
+      localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+    } catch (err) {
+      say("This browser will not keep the notes between reloads: " + err.message);
+    }
+  }
+
+  function restore() {
+    try {
+      const raw = localStorage.getItem(NOTES_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) notes = parsed.filter((n) => n && typeof n.t_in === "number");
+    } catch (err) {
+      notes = [];
+    }
+  }
+
+  function say(message) {
+    const banner = $("banner");
+    banner.textContent = message;
+    banner.classList.remove("hidden");
+  }
+
+  // ---- playback speed ----------------------------------------------------
+  function readSpeed() {
+    // A value that is not on the list would otherwise come back every time the
+    // page opens, and there is nothing on screen that would explain it.
+    const stored = Number(localStorage.getItem(SPEED_KEY));
+    return SPEEDS.indexOf(stored) === -1 ? 1 : stored;
+  }
+
+  function setSpeed(value) {
+    const rate = SPEEDS.indexOf(value) === -1 ? 1 : value;
+    video.playbackRate = rate;
+    $("speed").value = String(rate);
+    try { localStorage.setItem(SPEED_KEY, String(rate)); } catch (err) { /* private window */ }
+  }
+
+  function stepSpeed(direction) {
+    const at = SPEEDS.indexOf(Number($("speed").value));
+    const next = Math.min(SPEEDS.length - 1, Math.max(0, (at === -1 ? 2 : at) + direction));
+    setSpeed(SPEEDS[next]);
+  }
+
+  // ---- the strip ---------------------------------------------------------
+  function drawStrip() {
+    Array.from(strip.querySelectorAll("[data-marker]")).forEach((el) => el.remove());
+    const total = duration() || 1;
+    notes.forEach((note) => {
+      const mark = document.createElement("div");
+      mark.dataset.marker = String(note.id);
+      const left = (note.t_in / total) * 100;
+      const wide = note.t_out !== null && note.t_out !== undefined
+        ? Math.max(0.35, ((note.t_out - note.t_in) / total) * 100) : null;
+      mark.className = "absolute top-0 bottom-0 cursor-pointer" +
+        (note.id === selected ? " ring-2 ring-stone-900 z-10" : "");
+      mark.style.left = left + "%";
+      mark.style.width = wide !== null ? wide + "%" : "2px";
+      mark.style.background = KIND_COLOR[note.kind] || KIND_COLOR.note;
+      mark.style.opacity = wide !== null ? "0.75" : "1";
+      mark.title = timecode(note.t_in) + "  " + note.kind + (note.text ? "  " + note.text : "");
+      mark.addEventListener("mousedown", (event) => {
+        event.stopPropagation();
+        seek(note.t_in);
+        select(note.id);
+      });
+      strip.appendChild(mark);
+    });
+    moveHead();
+  }
+
+  function moveHead() {
+    const total = duration() || 1;
+    $("head").style.left = ((video.currentTime / total) * 100) + "%";
+  }
+
+  function timeAt(event) {
+    const box = strip.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (event.clientX - box.left) / box.width));
+    return ratio * (duration() || 0);
+  }
+
+  function seek(t) {
+    video.currentTime = Math.min(Math.max(0, t), Math.max(0, duration() - 0.001));
+    moveHead();
+    $("clock").textContent = timecode(video.currentTime);
+  }
+
+  // ---- the notes list ----------------------------------------------------
+  function select(id) {
+    selected = id;
+    render();
+  }
+
+  function render() {
+    const sorted = notes.slice().sort((a, b) => a.t_in - b.t_in);
+    $("count").textContent = String(sorted.length);
+    $("empty").classList.toggle("hidden", sorted.length > 0);
+
+    const list = $("notes");
+    list.innerHTML = "";
+    sorted.forEach((note) => {
+      const row = document.createElement("div");
+      row.className = "bg-white rounded-lg border p-3 cursor-pointer hover:border-stone-500 " +
+        (note.id === selected ? "border-stone-900" : "border-stone-300");
+      const when = timecode(note.t_in) +
+        (note.t_out !== null && note.t_out !== undefined ? " - " + timecode(note.t_out) : "");
+      const body = (note.text || "").trim() ||
+        (note.voice ? "(voice note)" : "(no text)");
+
+      const head = document.createElement("div");
+      head.className = "flex items-center gap-2 mb-1";
+      const dot = document.createElement("span");
+      dot.className = "inline-block w-2.5 h-2.5 rounded-full shrink-0";
+      dot.style.background = KIND_COLOR[note.kind] || KIND_COLOR.note;
+      const label = document.createElement("span");
+      label.className = "font-mono text-[12px] font-semibold";
+      label.textContent = when;
+      const kind = document.createElement("span");
+      kind.className = "text-[10px] font-bold uppercase tracking-[1.5px] text-stone-500";
+      kind.textContent = note.kind;
+      const remove = document.createElement("button");
+      remove.className = "ml-auto text-[11px] text-stone-400 hover:text-red-600";
+      remove.textContent = "delete";
+      remove.addEventListener("click", (event) => {
+        event.stopPropagation();
+        notes = notes.filter((other) => other.id !== note.id);
+        if (selected === note.id) selected = null;
+        persist(); render(); drawStrip();
+      });
+      head.append(dot, label, kind, remove);
+
+      const text = document.createElement("div");
+      text.className = "text-[13px] leading-snug text-stone-700 whitespace-pre-wrap";
+      text.textContent = body;
+
+      row.append(head, text);
+      row.addEventListener("click", () => { seek(note.t_in); select(note.id); });
+      list.appendChild(row);
+    });
+    drawStrip();
+  }
+
+  // ---- the editor --------------------------------------------------------
+  function drawKinds() {
+    const box = $("kinds");
+    box.innerHTML = "";
+    KINDS.forEach((kind) => {
+      const button = document.createElement("button");
+      button.className = "px-3 py-1.5 rounded-lg text-[12px] font-semibold border transition " +
+        (kind === draftKind
+          ? "text-white border-transparent"
+          : "bg-white text-stone-700 border-stone-400 hover:bg-stone-100");
+      if (kind === draftKind) button.style.background = KIND_COLOR[kind];
+      button.textContent = kind;
+      button.addEventListener("click", () => { draftKind = kind; drawKinds(); });
+      box.appendChild(button);
+    });
+  }
+
+  function openEditor(t_in, t_out, note) {
+    if (!video.paused) video.pause();
+    editing = note ? note.id : null;
+    draft = { t_in: t_in, t_out: (t_out === undefined ? null : t_out) };
+    draftKind = note ? note.kind : "note";
+    $("text").value = note ? (note.text || "") : "";
+    $("editor-when").textContent = timecode(draft.t_in) +
+      (draft.t_out !== null ? " - " + timecode(draft.t_out) : "");
+    $("editor-clear-out").classList.toggle("hidden", draft.t_out === null);
+    editor.classList.remove("hidden");
+    drawKinds();
+    $("text").focus();
+    updatePlayButton();
+  }
+
+  function closeEditor() {
+    editor.classList.add("hidden");
+    draft = null;
+    editing = null;
+    pendingIn = null;
+    $("sel").classList.add("hidden");
+  }
+
+  function saveDraft() {
+    if (!draft) return;
+    const existing = editing !== null ? notes.find((n) => n.id === editing) : null;
+    const note = existing || {
+      id: notes.reduce((top, n) => Math.max(top, n.id), 0) + 1,
+      voice: null, voice_text: null, created: stamp(),
+    };
+    note.t_in = draft.t_in;
+    note.t_out = draft.t_out;
+    note.frame_in = timeToFrame(draft.t_in);
+    note.frame_out = draft.t_out === null ? null : timeToFrame(draft.t_out);
+    note.kind = draftKind;
+    note.text = $("text").value.trim();
+    if (!existing) notes.push(note);
+    selected = note.id;
+    persist();
+    closeEditor();
+    render();
+  }
+
+  // ---- wiring ------------------------------------------------------------
+  function updatePlayButton() {
+    $("play").textContent = video.paused ? "Play" : "Pause";
+  }
+
+  function togglePlay() {
+    if (video.paused) video.play(); else video.pause();
+  }
+
+  video.src = params.video;
+  $("title").textContent = params.stem || "review";
+  // "24/1" is the canonical rate, and it is what goes in the notes file. On
+  // screen it reads better as a number, with the exact ratio kept in reach.
+  $("meta").textContent = Number.isInteger(FPS)
+    ? FPS + " fps"
+    : FPS.toFixed(3) + " fps (" + params.fps + ")";
+
+  const speedBox = $("speed");
+  SPEEDS.forEach((value) => {
+    const option = document.createElement("option");
+    option.value = String(value);
+    option.textContent = value + "x";
+    speedBox.appendChild(option);
+  });
+  speedBox.addEventListener("change", () => setSpeed(Number(speedBox.value)));
+
+  video.addEventListener("loadedmetadata", () => {
+    $("of").textContent = "of " + timecode(duration());
+    setSpeed(readSpeed());
+    render();
+  });
+  video.addEventListener("error", () => {
+    say("The video did not load from " + params.video +
+        " - the page has to sit next to the file it was generated for.");
+  });
+  video.addEventListener("timeupdate", () => {
+    $("clock").textContent = timecode(video.currentTime);
+    moveHead();
+  });
+  video.addEventListener("play", updatePlayButton);
+  video.addEventListener("pause", updatePlayButton);
+  $("play").addEventListener("click", togglePlay);
+
+  // Click seeks, drag opens a range.
+  let dragFrom = null;
+  strip.addEventListener("mousedown", (event) => {
+    dragFrom = { x: event.clientX, t: timeAt(event) };
+  });
+  window.addEventListener("mousemove", (event) => {
+    if (dragFrom === null) return;
+    if (Math.abs(event.clientX - dragFrom.x) < 4) return;
+    const box = strip.getBoundingClientRect();
+    const a = Math.min(dragFrom.x, event.clientX), b = Math.max(dragFrom.x, event.clientX);
+    const sel = $("sel");
+    sel.style.left = (Math.max(box.left, a) - box.left) + "px";
+    sel.style.width = (Math.min(box.right, b) - Math.max(box.left, a)) + "px";
+    sel.classList.remove("hidden");
+  });
+  window.addEventListener("mouseup", (event) => {
+    if (dragFrom === null) return;
+    const moved = Math.abs(event.clientX - dragFrom.x) >= 4;
+    const from = dragFrom;
+    dragFrom = null;
+    if (!moved) {
+      $("sel").classList.add("hidden");
+      seek(from.t);
+      return;
+    }
+    const to = timeAt(event);
+    seek(Math.min(from.t, to));
+    openEditor(Math.min(from.t, to), Math.max(from.t, to));
+  });
+
+  $("save").addEventListener("click", saveDraft);
+  $("cancel").addEventListener("click", closeEditor);
+  $("editor-clear-out").addEventListener("click", () => {
+    if (!draft) return;
+    draft.t_out = null;
+    $("editor-when").textContent = timecode(draft.t_in);
+    $("editor-clear-out").classList.add("hidden");
+  });
+  $("text").addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); saveDraft(); }
+    if (event.key === "Escape") { event.preventDefault(); closeEditor(); }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    const tag = (event.target.tagName || "").toLowerCase();
+    if (tag === "textarea" || tag === "input" || tag === "select") return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    const frame = 1 / FPS;
+
+    switch (event.key) {
+      case " ": event.preventDefault(); togglePlay(); break;
+      // Pausing is the point. At 1.5x the instant you reacted to is already
+      // behind the playhead, and a comment on a moving target lands late.
+      case "c": event.preventDefault(); video.pause(); openEditor(video.currentTime, null); break;
+      case "i": event.preventDefault(); pendingIn = video.currentTime; flashIn(); break;
+      case "o":
+        event.preventDefault();
+        if (pendingIn === null) { say("Press i first to mark where the range starts."); break; }
+        openEditor(Math.min(pendingIn, video.currentTime), Math.max(pendingIn, video.currentTime));
+        break;
+      case "ArrowLeft": event.preventDefault(); seek(video.currentTime - (event.shiftKey ? 1 : frame)); break;
+      case "ArrowRight": event.preventDefault(); seek(video.currentTime + (event.shiftKey ? 1 : frame)); break;
+      case "<": case ",": event.preventDefault(); stepSpeed(-1); break;
+      case ">": case ".": event.preventDefault(); stepSpeed(1); break;
+      case "0": event.preventDefault(); setSpeed(1); break;
+      case "Escape": closeEditor(); break;
+      default: break;
+    }
+  });
+
+  function flashIn() {
+    const box = strip.getBoundingClientRect();
+    const sel = $("sel");
+    sel.style.left = ((pendingIn / (duration() || 1)) * box.width) + "px";
+    sel.style.width = "2px";
+    sel.classList.remove("hidden");
+  }
+
+  if (!window.isSecureContext) {
+    say("This page is not a secure context, so the browser will withhold the " +
+        "microphone. Everything else still works.");
+  }
+
+  restore();
+  render();
+  setSpeed(readSpeed());
+})();
+</script>
+</body>
+</html>

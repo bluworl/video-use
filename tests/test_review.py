@@ -128,8 +128,9 @@ class BuildPageTests(unittest.TestCase):
         # Escaping "<" is what stops any of its relatives from trying.
         page, _ = self._page("x<script>y.mp4")
         html = page.read_text(encoding="utf-8")
-        injected = html.split(review.PARAMS_MARKER)[1][:400]
-        self.assertNotIn("<script>", injected)
+        after = html.split(review.PARAMS_MARKER)[1]
+        injected = after[:after.index("</script>")]
+        self.assertNotIn("<", injected)
         self.assertIn("\\u003c", injected)
         self.assertEqual(review.read_params(page)["stem"], "x<script>y")
 
