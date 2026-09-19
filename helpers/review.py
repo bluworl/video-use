@@ -230,3 +230,40 @@ def dump_notes(path: Path, transcribe: bool = True) -> str:
             f"- **{when}** `{n.get('kind', 'note')}` ({frames}): {body or '(no text)'}"
         )
     return "\n".join(lines) + "\n"
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(
+        description="Generate a browser review page for a cut, or read its notes back")
+    ap.add_argument("target", type=Path,
+                    help="video to review, or the notes JSON when using --dump")
+    ap.add_argument("--dump", action="store_true",
+                    help="print the notes as markdown instead of generating a page")
+    ap.add_argument("--no-transcribe", action="store_true",
+                    help="with --dump, skip Scribe and leave voice notes as file paths")
+    ap.add_argument("--out", type=Path, default=None,
+                    help="where to write the page (default: <video_parent>/review)")
+    ap.add_argument("--no-open", action="store_true", help="do not open the browser")
+    args = ap.parse_args()
+
+    target = args.target.expanduser()
+    if not target.exists():
+        sys.exit(f"not found: {target}")
+
+    if args.dump:
+        print(dump_notes(target.resolve(), transcribe=not args.no_transcribe), end="")
+        return
+
+    video = target.resolve()
+    out_dir = (args.out or video.parent / "review").resolve()
+    page = build_page(video, out_dir)
+    notes = out_dir / f"{video.stem}.review.json"
+    print(f"page:  {page}")
+    print(f"notes: {notes}  ({'exists' if notes.exists() else 'not written yet'})")
+    print(f"read them back with:  python {Path(__file__).name} --dump {notes}")
+    if not args.no_open:
+        webbrowser.open(page.as_uri())
+
+
+if __name__ == "__main__":
+    main()

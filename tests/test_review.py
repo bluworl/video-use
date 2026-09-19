@@ -1,5 +1,8 @@
+import contextlib
 import importlib.util
+import io
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -242,6 +245,38 @@ class TranscribePendingTests(unittest.TestCase):
             done = review.transcribe_pending(self.data, self.path)
         self.assertEqual(done, 0)
         self.assertIsNone(self.data["notes"][0]["voice_text"])
+
+
+class CliTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.addCleanup(self.tmp.cleanup)
+
+    def test_dump_prints_the_markdown(self):
+        path = self.root / "final.review.json"
+        path.write_text(json.dumps(NOTES), encoding="utf-8")
+        buf = io.StringIO()
+        with patch.object(sys, "argv",
+                          ["review.py", "--dump", str(path), "--no-transcribe"]), \
+             contextlib.redirect_stdout(buf):
+            review.main()
+        self.assertIn("goes nowhere", buf.getvalue())
+
+    def test_generate_defaults_to_a_review_dir_next_to_the_video(self):
+        video = self.root / "final.mp4"
+        video.write_bytes(b"x")
+        with patch.object(sys, "argv", ["review.py", str(video), "--no-open"]), \
+             patch.object(review, "probe_source_fps", return_value="24"), \
+             patch.object(review, "probe_duration", return_value=9.0), \
+             contextlib.redirect_stdout(io.StringIO()):
+            review.main()
+        self.assertTrue((self.root / "review" / "final.html").exists())
+
+    def test_a_missing_video_stops_with_a_message(self):
+        with patch.object(sys, "argv", ["review.py", str(self.root / "nope.mp4")]):
+            with self.assertRaises(SystemExit):
+                review.main()
 
 
 if __name__ == "__main__":
