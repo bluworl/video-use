@@ -51,6 +51,7 @@ The skill lives in `video-use/`. User footage lives wherever they put it. All se
     ├── master.srt               ← output-timeline subtitles
     ├── downloads/               ← yt-dlp outputs
     ├── verify/                  ← debug frames / timeline PNGs
+    ├── review/                  ← review page + <stem>.review.json + voice/
     ├── preview.mp4
     └── final.mp4
 ```
@@ -77,6 +78,7 @@ Helpers (`helpers/transcribe.py`, `helpers/render.py`, etc.) live alongside this
 - **`timeline_view.py <video> <start> <end>`** — filmstrip + waveform PNG. On-demand visual drill-down. **Not a scan tool** — use it at decision points, not constantly.
 - **`render.py <edl.json> -o <out>`** — per-segment extract → concat → overlays (PTS-shifted) → subtitles LAST. `--preview` for 720p fast. `--build-subtitles` to generate master.srt inline.
 - **`grade.py <in> -o <out>`** — ffmpeg filter chain grade. Presets + `--filter '<raw>'` for custom.
+- **`review.py <video>`** — writes a browser page next to the cut where the user scrubs and leaves timecode-anchored comments (`cut` / `shorten` / `lengthen` / `wrong` / free text / voice). `--dump <notes.json>` prints them back as time-ordered markdown, transcribing voice notes. No server: the page is opened from disk. Chrome/Edge save to disk directly; other browsers fall back to a download.
 
 For animations, create `<edit>/animations/slot_<id>/` with `Bash` and spawn a sub-agent via the `Agent` tool.
 
@@ -97,7 +99,8 @@ For animations, create `<edit>/animations/slot_<id>/` with `Bash` and spawn a su
    Also sample: first 2s, last 2s, and 2–3 mid-points — check grade consistency, subtitle readability, overall coherence. Run `ffprobe` on the output to verify duration matches the EDL expectation.
 
    If anything fails: fix → re-render → re-eval. **Cap at 3 self-eval passes** — if issues remain after 3, flag them to the user rather than looping forever. Only present the preview once the self-eval passes.
-8. **Iterate + persist.** Natural-language feedback, re-plan, re-render. Never re-transcribe. Final render on confirmation. Append to `project.md`.
+8. **Review (when the user wants to comment).** `review.py <output>` opens a page where they scrub and drop comments on exact timecodes, by voice if they prefer. `review.py --dump <notes>` brings them back as markdown, each with a frame number. Translate them into EDL changes yourself — the notes are notes, nothing is applied automatically. Worth offering on anything long enough that "the bit about halfway through chapter four" stops being a usable address.
+9. **Iterate + persist.** Natural-language feedback, re-plan, re-render. Never re-transcribe. Final render on confirmation. Append to `project.md`.
 
 ## Cut craft (techniques)
 
