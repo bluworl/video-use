@@ -26,6 +26,9 @@ NOTES = {
         {"id": 1, "t_in": 10.0, "t_out": 14.0, "frame_in": 240, "frame_out": 336,
          "kind": "cut", "text": "goes nowhere", "voice": None, "voice_text": None,
          "created": "2026-09-19T13:44:02"},
+        {"id": 3, "t_in": 90.0, "t_out": None, "frame_in": 2160, "frame_out": None,
+         "kind": "note", "text": "this logo", "voice": None, "voice_text": None,
+         "x": 0.615, "y": 0.312, "created": "2026-09-19T13:48:00"},
     ],
 }
 
@@ -161,6 +164,15 @@ class DumpNotesTests(unittest.TestCase):
         self.assertIn("0:10.00 - 0:14.00", out)
         self.assertIn("1:05.12", out)
         self.assertNotIn("1:05.12 -", out)
+
+    def test_a_point_on_the_frame_is_reported_as_a_percentage(self):
+        out = review.dump_notes(self.path, transcribe=False)
+        self.assertIn("62%,31% of the frame", out)
+
+    def test_a_note_without_a_point_says_nothing_about_one(self):
+        out = review.dump_notes(self.path, transcribe=False)
+        line = [ln for ln in out.splitlines() if "goes nowhere" in ln][0]
+        self.assertNotIn("of the frame", line)
 
     def test_names_the_video_and_every_kind(self):
         out = review.dump_notes(self.path, transcribe=False)

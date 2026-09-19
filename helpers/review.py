@@ -220,6 +220,10 @@ def dump_notes(path: Path, transcribe: bool = True) -> str:
         if n.get("t_out") is not None:
             when += f" - {format_timecode(n['t_out'], fps)}"
             frames = f"frames {n.get('frame_in')}-{n.get('frame_out')}"
+        # A note can also point at a spot inside the frame. The percentages are
+        # of the picture, not of the window, so they survive any player size.
+        if n.get("x") is not None and n.get("y") is not None:
+            frames += " at {:.0%},{:.0%} of the frame".format(n["x"], n["y"])
         body = (n.get("text") or "").strip()
         spoken = (n.get("voice_text") or "").strip()
         if spoken:
