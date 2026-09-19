@@ -18,6 +18,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import webbrowser
 from fractions import Fraction
 from pathlib import Path
@@ -25,6 +26,7 @@ from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from render import parse_fps, probe_source_fps  # noqa: E402  same directory
+from transcribe import call_scribe, extract_audio, load_api_key  # noqa: E402
 
 KINDS = ("cut", "shorten", "lengthen", "wrong", "note")
 
@@ -135,8 +137,44 @@ def build_page(video: Path, out_dir: Path) -> Path:
 
 
 def transcribe_pending(data: dict, notes_path: Path) -> int:
-    """Fill in voice_text for voice notes that lack it. Returns how many were done."""
-    return 0
+    """Fill in voice_text for voice notes that lack it. Returns how many were done.
+
+    The page never calls Scribe: that would mean shipping the API key inside an
+    HTML file. It records and saves; the transcription happens here, where the
+    key already lives.
+
+    The result is written back into the notes file so a second --dump does not
+    pay for the same audio twice.
+    """
+    pending = [n for n in data["notes"] if n.get("voice") and not n.get("voice_text")]
+    if not pending:
+        return 0
+    try:
+        api_key = load_api_key()
+    except SystemExit:
+        print("no ELEVENLABS_API_KEY: leaving voice notes untranscribed", file=sys.stderr)
+        return 0
+
+    done = 0
+    for note in pending:
+        audio = (notes_path.parent / note["voice"]).resolve()
+        if not audio.exists():
+            print(f"voice file missing, skipped: {note['voice']}", file=sys.stderr)
+            continue
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "voice.wav"
+            # The same extraction the rest of the skill uses: Scribe gets 16 kHz
+            # mono wav whatever the browser recorded.
+            extract_audio(audio, wav)
+            payload = call_scribe(wav, api_key)
+        note["voice_text"] = (payload.get("text") or "").strip()
+        done += 1
+
+    if done:
+        notes_path.write_text(
+            json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+    return done
 
 
 def load_notes(path: Path) -> dict:

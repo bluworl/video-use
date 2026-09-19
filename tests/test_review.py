@@ -192,5 +192,57 @@ class LoadNotesTests(unittest.TestCase):
             review.load_notes(self.path.parent / "nope.json")
 
 
+class TranscribePendingTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        (self.root / "voice").mkdir()
+        (self.root / "voice" / "001.webm").write_bytes(b"fake opus")
+        self.path = self.root / "final.review.json"
+        self.data = {
+            "video": "final.mp4", "fps": "24", "duration": 30.0,
+            "notes": [{"id": 1, "t_in": 3.0, "t_out": None, "frame_in": 72,
+                       "frame_out": None, "kind": "note", "text": "",
+                       "voice": "voice/001.webm", "voice_text": None,
+                       "created": "2026-09-19T13:44:02"}],
+        }
+        self.path.write_text(json.dumps(self.data), encoding="utf-8")
+        self.addCleanup(self.tmp.cleanup)
+
+    def test_transcribes_and_writes_the_text_back_to_the_file(self):
+        with patch.object(review, "load_api_key", return_value="k"), \
+             patch.object(review, "extract_audio"), \
+             patch.object(review, "call_scribe",
+                          return_value={"text": "cut this bit"}) as scribe:
+            done = review.transcribe_pending(self.data, self.path)
+        self.assertEqual(done, 1)
+        self.assertEqual(scribe.call_count, 1)
+        self.assertEqual(self.data["notes"][0]["voice_text"], "cut this bit")
+        saved = json.loads(self.path.read_text(encoding="utf-8"))
+        self.assertEqual(saved["notes"][0]["voice_text"], "cut this bit")
+
+    def test_does_not_pay_twice_for_a_note_already_transcribed(self):
+        self.data["notes"][0]["voice_text"] = "already done"
+        with patch.object(review, "call_scribe") as scribe:
+            done = review.transcribe_pending(self.data, self.path)
+        self.assertEqual(done, 0)
+        scribe.assert_not_called()
+
+    def test_a_missing_audio_file_is_reported_not_fatal(self):
+        (self.root / "voice" / "001.webm").unlink()
+        with patch.object(review, "load_api_key", return_value="k"), \
+             patch.object(review, "call_scribe") as scribe:
+            done = review.transcribe_pending(self.data, self.path)
+        self.assertEqual(done, 0)
+        scribe.assert_not_called()
+        self.assertIsNone(self.data["notes"][0]["voice_text"])
+
+    def test_without_an_api_key_the_notes_survive_untranscribed(self):
+        with patch.object(review, "load_api_key", side_effect=SystemExit("no key")):
+            done = review.transcribe_pending(self.data, self.path)
+        self.assertEqual(done, 0)
+        self.assertIsNone(self.data["notes"][0]["voice_text"])
+
+
 if __name__ == "__main__":
     unittest.main()
