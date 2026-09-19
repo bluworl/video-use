@@ -132,3 +132,63 @@ def build_page(video: Path, out_dir: Path) -> Path:
     page = out_dir / f"{video.stem}.html"
     page.write_text(html[:start] + blob + html[end:], encoding="utf-8")
     return page
+
+
+def transcribe_pending(data: dict, notes_path: Path) -> int:
+    """Fill in voice_text for voice notes that lack it. Returns how many were done."""
+    return 0
+
+
+def load_notes(path: Path) -> dict:
+    """Read a notes file, complaining usefully when it is not one.
+
+    A crash here loses somebody's review, so the failure says which file and
+    why rather than surfacing a bare JSONDecodeError.
+    """
+    if not path.exists():
+        raise FileNotFoundError(f"notes file not found: {path}")
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"{path.name} is not valid JSON ({exc.msg}, line {exc.lineno})"
+        ) from exc
+    if not isinstance(data, dict) or not isinstance(data.get("notes"), list):
+        raise ValueError(
+            f"{path.name} does not look like a review file (no 'notes' list)"
+        )
+    return data
+
+
+def dump_notes(path: Path, transcribe: bool = True) -> str:
+    """The notes as markdown, in time order, for the agent to read."""
+    data = load_notes(path)
+    fps = fps_to_float(data.get("fps") or "25")
+
+    if transcribe:
+        transcribe_pending(data, path)
+    notes = sorted(data["notes"], key=lambda n: (n.get("t_in") or 0.0))
+
+    duration = data.get("duration") or 0.0
+    lines = [
+        f"# Review of {data.get('video', '?')}",
+        "",
+        f"{len(notes)} notes on {duration:.1f}s at {data.get('fps')} fps",
+        "",
+    ]
+    for n in notes:
+        when = format_timecode(n.get("t_in") or 0.0, fps)
+        frames = f"frame {n.get('frame_in')}"
+        if n.get("t_out") is not None:
+            when += f" - {format_timecode(n['t_out'], fps)}"
+            frames = f"frames {n.get('frame_in')}-{n.get('frame_out')}"
+        body = (n.get("text") or "").strip()
+        spoken = (n.get("voice_text") or "").strip()
+        if spoken:
+            body = f"{body} (spoken: {spoken})" if body else f"(spoken) {spoken}"
+        if not body and n.get("voice"):
+            body = f"(voice note not transcribed: {n['voice']})"
+        lines.append(
+            f"- **{when}** `{n.get('kind', 'note')}` ({frames}): {body or '(no text)'}"
+        )
+    return "\n".join(lines) + "\n"

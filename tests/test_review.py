@@ -12,6 +12,21 @@ review = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(review)
 
 
+NOTES = {
+    "video": "final.mp4",
+    "fps": "24",
+    "duration": 120.0,
+    "notes": [
+        {"id": 2, "t_in": 65.5, "t_out": None, "frame_in": 1572, "frame_out": None,
+         "kind": "wrong", "text": "", "voice": None, "voice_text": None,
+         "created": "2026-09-19T13:46:11"},
+        {"id": 1, "t_in": 10.0, "t_out": 14.0, "frame_in": 240, "frame_out": 336,
+         "kind": "cut", "text": "goes nowhere", "voice": None, "voice_text": None,
+         "created": "2026-09-19T13:44:02"},
+    ],
+}
+
+
 class FpsToFloatTests(unittest.TestCase):
     def test_converts_integer_decimal_and_rational_rates(self):
         self.assertAlmostEqual(review.fps_to_float("24"), 24.0)
@@ -124,6 +139,57 @@ class BuildPageTests(unittest.TestCase):
         self.assertEqual(
             json.loads((out / "final.review.json").read_text())["notes"], []
         )
+
+
+class DumpNotesTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "final.review.json"
+        self.path.write_text(json.dumps(NOTES), encoding="utf-8")
+        self.addCleanup(self.tmp.cleanup)
+
+    def test_orders_by_time_not_by_id(self):
+        out = review.dump_notes(self.path, transcribe=False)
+        self.assertLess(out.index("0:10.00"), out.index("1:05.12"))
+
+    def test_range_shows_both_ends_and_a_point_shows_one(self):
+        out = review.dump_notes(self.path, transcribe=False)
+        self.assertIn("0:10.00 - 0:14.00", out)
+        self.assertIn("1:05.12", out)
+        self.assertNotIn("1:05.12 -", out)
+
+    def test_names_the_video_and_every_kind(self):
+        out = review.dump_notes(self.path, transcribe=False)
+        self.assertIn("final.mp4", out)
+        self.assertIn("cut", out)
+        self.assertIn("wrong", out)
+
+    def test_carries_the_frame_numbers_through(self):
+        out = review.dump_notes(self.path, transcribe=False)
+        self.assertIn("240", out)
+        self.assertIn("336", out)
+
+
+class LoadNotesTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = Path(self.tmp.name) / "broken.review.json"
+        self.addCleanup(self.tmp.cleanup)
+
+    def test_truncated_file_fails_with_the_path_in_the_message(self):
+        self.path.write_text('{"notes": [{"id": 1,', encoding="utf-8")
+        with self.assertRaises(ValueError) as caught:
+            review.load_notes(self.path)
+        self.assertIn("broken.review.json", str(caught.exception))
+
+    def test_a_file_that_is_not_a_review_is_rejected(self):
+        self.path.write_text('{"hello": 1}', encoding="utf-8")
+        with self.assertRaises(ValueError):
+            review.load_notes(self.path)
+
+    def test_missing_file_fails_clearly(self):
+        with self.assertRaises(FileNotFoundError):
+            review.load_notes(self.path.parent / "nope.json")
 
 
 if __name__ == "__main__":
